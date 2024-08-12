@@ -1,0 +1,142 @@
+---
+title: "ex11"
+author: "Danyili Hong"
+format:
+  html:
+    embed-resources: true
+    code-tools: true
+    code-fold: true
+---
+
+```{python}
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, export_text
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+from sklearn.metrics import accuracy_score
+import pandas as pd
+import sorobn as hh
+```
+
+```{python}
+column_names = ['class', 'age', 'menopause', 'tumor-size', 'inv-nodes', 'node-caps', 'deg-malig', 'breast', 'breast-quad', 'irradiat']
+breast = pd.read_csv("data/breast-cancer.data", names=column_names)
+```
+
+```{python}
+breast = breast.drop(['node-caps','breast-quad'], axis=1)
+```
+
+# Part 1a
+```{python}
+target = 'class'
+features = [i for i in breast.columns if i != target]
+```
+
+```{python}
+breast_onehot = pd.get_dummies(breast, columns = features)
+nfeatures = [i for i in breast_onehot.columns if i != target]
+```
+The feature columns are age, menopause, tumor-size, inv-nodes, deg-malig, breast, and irradiat. There are total 7 feature columns. 
+
+# Part 1b
+```{python}
+breast_onehot_train, breast_onehot_test = train_test_split(breast_onehot, random_state = 42, test_size = 0.5)
+model = RandomForestClassifier().fit(
+    X=breast_onehot_train[nfeatures],
+    y=breast_onehot_train[target])
+len(model.estimators_)
+```
+
+# Part 1c
+```{python}
+prediction = model.predict(X=breast_onehot_test[nfeatures])
+accuracy = accuracy_score(breast_onehot_test[target], prediction)
+print(f"Accuracy Score: {accuracy}")
+```
+
+# Part 2a
+```{python}
+structure = hh.structure.chow_liu(breast)
+bn = hh.BayesNet(*structure)
+```
+
+```{python}
+dot = bn.graphviz()
+print(dot.source)
+```
+
+```{dot}
+digraph{
+	class
+	"deg-malig"
+	"inv-nodes"
+	breast
+	irradiat
+	"tumor-size"
+	age
+	menopause
+	class -> "deg-malig"
+	"deg-malig" -> "inv-nodes"
+	"inv-nodes" -> breast
+	"inv-nodes" -> irradiat
+	"inv-nodes" -> "tumor-size"
+	"tumor-size" -> age
+	age -> menopause
+}
+```
+# Part 2b
+
+```{python}
+bn = bn.fit(breast)
+```
+
+# Part 3a
+```{python}
+bn.query('deg-malig', event={'age': '30-39'})
+```
+it returned 3 kinds of deg-malig and corresponding probability. 
+
+# Part 3b
+```{python}
+predictions = []
+for i in breast.to_dict('records'): # converting our database entries to dictionaries
+  del i[target] # dropping the target variable from the dict (only features then are remaining)
+  probs = bn.query(target, event=i)  # getting probabilities on the target variable given our features
+  predictions.append(probs.idxmax()) # add to a list what will be the most likely value (with the highest probability)
+```
+
+# Part 3c
+```{python}
+naccuracy = accuracy_score(
+    y_true=breast[target],
+    y_pred=predictions
+)
+print(f"Accuracy Score: {naccuracy}")
+```
+The accuracy score is 0.72 which is better than the previous model. 
+
+
+# Part 4
+
+```{python}
+breast_onehot_train, breast_onehot_test = train_test_split(breast_onehot, random_state = 42, test_size = 0.5)
+nmodel = DecisionTreeClassifier().fit(
+    X=breast_onehot_train[nfeatures],
+    y=breast_onehot_train[target])
+num_nodes = nmodel.tree_.node_count
+print("Number of nodes in the decision tree:", num_nodes)
+```
+
+
+```{python}
+prediction = nmodel.predict(X=breast_onehot_test[nfeatures])
+accuracy = accuracy_score(breast_onehot_test[target], prediction)
+print(f"Accuracy Score: {accuracy}")
+```
+I chaged the model to decision tree, and the accuracy score is lower than what I got using random forest. 
+
+
+
+

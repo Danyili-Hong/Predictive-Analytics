@@ -1,0 +1,153 @@
+---
+title: "ex05"
+author: "Danyili Hong"
+format:
+  html:
+    embed-resources: true
+    code-tools: true
+    code-fold: true
+---
+
+```{python}
+#| echo: true
+import numpy as np
+import pandas as pd
+import plotly.express as px
+pd.options.plotting.backend = "plotly"
+```
+
+```{python}
+#| echo: false
+# Hack to make plotly work in RStudio
+if 'r' in globals() and r['.Platform$GUI'] == "RStudio" and r['suppressMessages(requireNamespace("htmltools"))']:
+  r[".GlobalEnv$to_html <- function(x) { print(htmltools::HTML(x)) }"] and None
+  def show_plot(p): r.to_html(p._repr_html_())
+else:
+  def show_plot(p): return p
+```
+
+```{python}
+rides_2011 = pd.read_parquet("data/bikeshare_2011.parquet")
+
+rides = rides_2011
+rides.info()
+```
+
+# Part 1A
+```{python}
+#| echo: false
+num_rows = rides.shape[0]
+num_cols = rides.shape[1]
+```
+
+```{python}
+#| echo: false
+#| output: asis
+print("""
+There are {num_rows} rows in the data frame.
+""".format(num_rows=num_rows))
+print("""
+There are {num_cols} columns in the data frame.
+""".format(num_cols=num_cols))
+```
+Duration and start_time are quantitative, and rider_type categorical. 
+The first row of the data tells us a member started to ride at 2011-01-01 00:01:29, and the duration is 3548 seconds.
+
+# Part 1B
+```{python}
+rides.duration.describe()
+rides["duration_minutes"] = rides["duration"] / 60
+rides.head()
+```
+For #1, it makes sense that the person rides the bike for 5-6 minutes. 
+
+# Part 1C
+```{python}
+rides["start_time"].max()
+rides["start_time"].min()
+```
+
+# Part 1D
+```{python}
+rides.groupby('rider_type', as_index=False).size()
+```
+There are 246949 of casual riders, 979814 of member riders, and 4 of unknown riders. The size doesn't show in the data dictionary.
+
+# Part 2A
+```{python}
+rides['date'] = rides['start_time'].dt.date
+rides.head()
+```
+# Part 2B
+```{python}
+daily_rides = rides.groupby('date', as_index=False).agg(total_rides=('date', 'count'))
+daily_rides['date'] = pd.to_datetime(daily_rides['date'])
+daily_rides.head()
+```
+# Part 2C
+```{python}
+#| echo: false
+num_rows = daily_rides.shape[0]
+```
+
+```{python}
+#| echo: false
+#| output: asis
+print("""
+There are {num_rows} rows in the data frame.
+""".format(num_rows=num_rows))
+print("""
+There should be 365 rows of data in the data frame since there are 365 days in a year.
+""")
+```
+I got what I've expected. 
+
+# Part 2D
+```{python}
+show_plot(
+  px.scatter(
+    daily_rides,
+    x="date", y="total_rides",
+    trendline="lowess",
+    labels={"date": "Date", "total_rides": "Number of Rides"}
+    ))
+```
+# Part 3
+```{python}
+daily_rides_by_type = rides.groupby(['date', 'rider_type'], as_index=False).agg(rides=('rider_type', 'count'))
+daily_rides_by_type['date'] = pd.to_datetime(daily_rides_by_type['date'])
+daily_rides_by_type = daily_rides_by_type.query('rider_type != "Unknown"')
+show_plot(
+  px.scatter(
+    daily_rides_by_type,
+    x="date", y="rides",
+    trendline="lowess",
+    color = "rider_type",
+    labels={"date": "Date", "rides": "Number of Rides", "rider_type": "Type of Rider"}
+    ).update_traces(marker_size= 3, marker_opacity = 0.5))
+```
+# Part 4A
+```{python}
+# Extract day of week
+daily_rides_by_type['day_of_week'] = daily_rides_by_type['date'].dt.strftime("%a")
+# Convert to an ordered Categorical
+daily_rides_by_type['day_of_week'] = pd.Categorical(
+    daily_rides_by_type['day_of_week'],
+    categories=["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    ordered=True
+)
+show_plot(
+  px.box(
+    daily_rides_by_type,
+    x="day_of_week", y="rides",
+    color = "rider_type",
+    labels={"date": "Date", "rides": "Number of Rides", "rider_type": "Type of Rider"}
+    ))
+```
+# Part 4B
+```{python}
+daily_rides_by_type.groupby(['day_of_week', 'rider_type'], as_index=False).agg(median_rides=('rides', 'median'))
+```
+
+
+

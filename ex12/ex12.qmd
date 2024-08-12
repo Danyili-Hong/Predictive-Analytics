@@ -1,0 +1,303 @@
+---
+title: "ex12"
+author: "Danyili Hong"
+format:
+  html:
+    embed-resources: true
+    code-tools: true
+    code-fold: true
+---
+
+```{python}
+import pandas as pd
+import numpy as np
+
+from sklearn.compose import make_column_transformer
+from sklearn.datasets import fetch_openml, load_breast_cancer
+from sklearn.impute import SimpleImputer, KNNImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split, LeaveOneOut, cross_val_score, GridSearchCV
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.metrics import accuracy_score
+
+import plotly.express as px
+```
+
+```{python}
+titanic_all = fetch_openml(
+    data_id=40945, as_frame=True, parser="pandas"
+)
+titanic = titanic_all.frame
+```
+
+```{python}
+rng = np.random.RandomState(0)
+n_samples = titanic.shape[0]
+n_features = 500
+noise_feature_names = [f"noise_{i}" for i in range(n_features)]
+noise_features = pd.DataFrame(
+    rng.normal(size=(n_samples, n_features)),
+    columns=noise_feature_names
+)
+titanic = pd.concat([titanic, noise_features], axis=1)
+titanic.info()
+```
+
+```{python}
+# Select the features and target
+target_column = "survived"
+numeric_features = ["age", "fare"] + noise_feature_names
+categorical_features = ["embarked", "sex", "pclass"]
+feature_columns = numeric_features + categorical_features
+```
+
+```{python}
+titanic_train, titanic_test = train_test_split(
+    titanic, test_size=.5, random_state=0
+)
+print(f"Training set size: {titanic_train.shape[0]}")
+print(f"Test set size: {titanic_test.shape[0]}")
+```
+
+```{python}
+numeric_transformer = make_pipeline(
+    StandardScaler(),
+    SimpleImputer(strategy="median")
+)
+```
+
+```{python}
+categorical_transformer = make_pipeline(
+    SimpleImputer(strategy="most_frequent"),
+    OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+)
+```
+
+There will be 8 columns of categorical transformer produced. There will be 3 columns from "embarked", 2 from "sex", and 3 from "pclass".
+
+```{python}
+preprocessor = make_column_transformer(
+    (numeric_transformer, numeric_features),
+    (categorical_transformer, categorical_features)
+).set_output(transform='pandas')
+```
+
+```{python}
+example_preprocessed_data = preprocessor.fit_transform(titanic_train[feature_columns])
+example_preprocessed_data.info()
+example_preprocessed_data.head()
+```
+
+```{python}
+model = make_pipeline(
+    preprocessor,
+    LogisticRegression(penalty=None)
+)
+```
+
+```{python}
+model.fit(titanic_train[feature_columns], titanic_train[target_column])
+
+train_predictions = model.predict(titanic_train[feature_columns])
+
+test_predictions = model.predict(titanic_test[feature_columns])
+
+train_accuracy = accuracy_score(titanic_train[target_column], train_predictions)
+
+test_accuracy = accuracy_score(titanic_test[target_column], test_predictions)
+
+print(f"Accuracy on the training set: {train_accuracy:.2f}")
+print(f"Accuracy on the test set: {test_accuracy:.2f}")
+```
+
+I think the model is overfitting since the accuracy score for training set is much larger than the accuracy score of test set.
+
+#Regularization
+```{python}
+def get_coefs_df(model, feature_names):
+    logreg = model.named_steps['logisticregression']
+    assert logreg.coef_.shape[0] == 1
+    assert logreg.coef_.shape[1] == len(feature_names)
+    coefs_df = pd.DataFrame(dict(
+        name=feature_names,
+        coef=logreg.coef_[0]
+    ))
+    coefs_df['abs_coef'] = coefs_df['coef'].abs()
+    return coefs_df.sort_values('abs_coef', ascending=False)
+
+coefs_df = get_coefs_df(model, example_preprocessed_data.columns)
+coefs_df.head(10)
+```
+
+```{python}
+coefs_df['is_noise'] = coefs_df['name'].str.contains('noise')
+print("Total noise coefficients: {:.2f}".format(
+    coefs_df.query('is_noise')['coef'].abs().sum())
+)
+```
+
+```{python}
+model = make_pipeline(
+    preprocessor,
+    LogisticRegression(C=1e-1, penalty='l1', solver='liblinear')
+).fit(
+    X=titanic_train[feature_columns],
+    y=titanic_train[target_column]
+)
+print("Accuracy on training set:", model.score(
+    X=titanic_train[feature_columns],
+    y=titanic_train[target_column]
+))
+print("Accuracy on test set:", model.score(
+    X=titanic_test[feature_columns],
+    y=titanic_test[target_column]
+))
+```
+
+```{python}
+coefs_df = get_coefs_df(model, example_preprocessed_data.columns)
+coefs_df.head(10)
+```
+
+```{python}
+coefs_df['is_noise'] = coefs_df['name'].str.contains('noise')
+print("Total weight on noise coefficients: {:.2f}".format(
+    coefs_df.query('is_noise')['coef'].abs().sum())
+)
+```
+
+The accuracy score between training set and test set became similar, and the noise coefficient is much smaller than the former one.
+
+```{python}
+# Make a plot of train and test accuracy vs C
+C_values_to_try = [1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100]
+train_accuracies = []
+test_accuracies = []
+for C in C_values_to_try:
+    model = make_pipeline(
+        preprocessor,
+        LogisticRegression(C=C, penalty='l1', solver='liblinear')
+    ).fit(
+        X=titanic_train[feature_columns],
+        y=titanic_train[target_column]
+    )
+    train_accuracies.append(model.score(
+        X=titanic_train[feature_columns],
+        y=titanic_train[target_column]
+    ))
+    test_accuracies.append(model.score(
+        X=titanic_test[feature_columns],
+        y=titanic_test[target_column]
+    ))
+accuracies_df = pd.DataFrame(dict(
+    C=C_values_to_try,
+    train_accuracy=train_accuracies,
+    test_accuracy=test_accuracies
+)).melt(id_vars='C', var_name='dataset', value_name='accuracy')
+```
+
+```{python}
+px.line(accuracies_df, x='C', y='accuracy', color='dataset', log_x=True)
+```
+
+As the value of C increases, the train accuracy increases. Any number larger than 1 gives the best training accuracy. As the value of C increases, the test accuracy increases and decreases after peak. When C= 1e-1, we get the best test accuracy.
+
+# Cross-Validation
+```{python}
+C_values_to_try = [1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100]
+
+model = make_pipeline(
+    preprocessor,
+    LogisticRegression(C=C, penalty='l1', solver='liblinear')
+)
+search = GridSearchCV(
+    model,
+    param_grid=dict(
+        logisticregression__C=C_values_to_try
+    ),
+    cv=5,
+    verbose=4
+).fit(
+    X=titanic_train[feature_columns],
+    y=titanic_train[target_column]
+)
+```
+
+```{python}
+cv_results = pd.DataFrame(search.cv_results_)
+cv_results
+```
+
+```{python}
+cv_results_melted = cv_results.melt(
+    id_vars='param_logisticregression__C',
+    value_vars=['split{}_test_score'.format(i) for i in range(5)],
+    var_name='fold',
+    value_name='score'
+).rename(columns=dict(
+    param_logisticregression__C='C'
+))
+cv_results_melted
+```
+
+```{python}
+px.box(
+    cv_results_melted,
+    x="C", y="score", log_x=True,
+    title="Cross-validation scores", labels=dict(
+        C="Regularization strength (C)",
+        score="Accuracy"
+))
+```
+
+```{python}
+search.best_params_
+```
+
+```{python}
+print("Accuracy on training set:", search.score(
+    X=titanic_train[feature_columns],
+    y=titanic_train[target_column]
+))
+print("Accuracy on test set:", search.score(
+    X=titanic_test[feature_columns],
+    y=titanic_test[target_column]
+))
+```
+
+#Gradient Boosting
+```{python}
+from sklearn.ensemble import HistGradientBoostingClassifier
+```
+
+```{python}
+model = make_pipeline(
+    make_column_transformer(
+        ('passthrough', numeric_features),
+        (OneHotEncoder(handle_unknown="ignore", sparse_output=False), categorical_features)
+    ),
+    HistGradientBoostingClassifier()
+).fit(
+    X=titanic_train[feature_columns],
+    y=titanic_train[target_column]
+)
+```
+
+```{python}
+print("Accuracy on training set:", model.score(
+    X=titanic_train[feature_columns],
+    y=titanic_train[target_column]
+))
+```
+
+```{python}
+print("Accuracy on test set:", model.score(
+    X=titanic_test[feature_columns],
+    y=titanic_test[target_column]
+))
+```
+
+
+
+

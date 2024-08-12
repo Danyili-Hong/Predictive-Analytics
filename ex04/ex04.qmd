@@ -1,0 +1,130 @@
+---
+title: "ex04"
+author: "Danyili Hong"
+format:
+  html:
+    embed-resources: true
+    code-tools: true
+    code-fold: true
+---
+
+```{python}
+#| echo: true
+import pandas as pd
+import plotly.express as px
+```
+
+```{python}
+#| echo: false
+# Hack to make plotly work in RStudio
+if 'r' in globals() and r['.Platform$GUI'] == "RStudio" and r['suppressMessages(requireNamespace("htmltools"))']:
+  r[".GlobalEnv$to_html <- function(x) { print(htmltools::HTML(x)) }"] and None
+  def show_plot(p): r.to_html(p._repr_html_())
+else:
+  def show_plot(p): return p
+```
+
+```{python}
+gapminder = px.data.gapminder()
+gapminder_latest = gapminder.query("year == 2007")
+just_usa = gapminder.query("country == 'United States'")
+
+
+countries = [
+  "China", "India", "United States",
+  "Indonesia", "Brazil", "Pakistan",
+  "Bangladesh", "Nigeria", "Japan"]
+
+gapminder_9_countries = gapminder.query("country in @countries")
+```
+
+# part 1
+```{python}
+show_plot(
+  px.histogram(
+    gapminder_latest,
+    x="lifeExp",
+    labels={"lifeExp": "Life Expectancy at Birth"},
+    title = "Distribution of Life Expectancy by Country in 2007"
+   ))
+```
+
+```{python}
+show_plot(
+  px.box(
+    gapminder_latest,
+    x="lifeExp",
+    labels={"lifeExp": "Life Expectancy at Birth"},
+    title = "Distribution of Life Expectancy by Country in 2007"
+   ))
+```
+
+# part 2A
+```{python}
+show_plot(
+  px.histogram(
+    gapminder_latest,
+    y="continent",
+    labels={"continent": "Continent"},
+    title = "Number of Countries by Continent",
+   ).update_yaxes(categoryorder="total ascending")
+   .update_traces(marker=dict(color="grey")))
+```
+
+# part 2B
+```{python}
+country_count_by_continent = gapminder_latest.groupby("continent", as_index=False).size()
+```
+
+```{python}
+show_plot(
+  px.bar(
+    country_count_by_continent,
+    y="continent", x="size",
+    labels={"continent": "continent", "size": "Number of Countries"},
+    title = "Number of Countries by Continent",
+   ).update_yaxes(categoryorder="total ascending"))
+```
+
+# part 3
+```{python}
+show_plot(
+  px.box(
+    gapminder_latest,
+    x="gdpPercap", y="continent",
+    title = "GDP values by Country in 2007",
+   ).update_yaxes(categoryorder="median descending"))
+```
+
+```{python}
+show_plot(
+  px.violin(
+    gapminder_latest,
+    x="lifeExp", y="continent",
+    title = "Distribution of Life Expectancy by continent in 2007",
+   ).update_yaxes(categoryorder="median descending"))
+```
+
+I put both of them in median descending order but it looks like they are not in same order.
+
+# part 4
+```{python}
+show_plot(
+  px.violin(
+    gapminder,
+    x="year", y="pop",
+    title = "Distribution of population by year",
+   ).update_yaxes(categoryorder="median descending"))
+```
+
+```{python}
+show_plot(
+  px.violin(
+    gapminder,
+    x="year", y="lifeExp",
+    title = "Distribution of Life Expectancy by year",
+   ).update_yaxes(categoryorder="median descending"))
+```
+
+I think both of the graphs are showing a trend that population and life expectancy are increasing as year goes by.
+

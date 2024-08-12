@@ -1,0 +1,127 @@
+---
+title: "ex06"
+author: "Danyili Hong"
+format:
+  html:
+    embed-resources: true
+    code-tools: true
+    code-fold: true
+---
+
+```{python}
+#| echo: true
+import numpy as np
+import pandas as pd
+import plotly.express as px
+pd.options.plotting.backend = "plotly"
+```
+
+```{python}
+#| echo: false
+# Hack to make plotly work in RStudio
+if 'r' in globals() and r['.Platform$GUI'] == "RStudio" and r['suppressMessages(requireNamespace("htmltools"))']:
+  r[".GlobalEnv$to_html <- function(x) { print(htmltools::HTML(x)) }"] and None
+  def show_plot(p): r.to_html(p._repr_html_())
+else:
+  def show_plot(p): return p
+```
+
+```{python}
+gapminder_gdp = pd.read_csv("data/gdp_pcap.csv")
+gapminder_gdp.head()
+
+gapminder_life = pd.read_csv("data/lex.csv")
+gapminder_life.head()
+```
+
+# Wide to Long
+```{python}
+gdp_long = pd.melt(
+    gapminder_gdp,
+    id_vars=['country'],
+    var_name="year", value_name="gdp_pcap"
+)
+print(gdp_long)
+```
+
+```{python}
+life_long = pd.melt(
+    gapminder_life,
+    id_vars=['country'],
+    var_name="year", value_name="life"
+)
+print(life_long)
+```
+
+# Data Types
+gdp_pcap
+```{python}
+gdp_long['year'] = gdp_long['year'].astype(int)
+
+def parse_number_with_units(num):
+    if not isinstance(num, str):
+        return num
+    if num.endswith("k"):
+        return float(num[:-1]) * 1000
+    return float(num)
+gdp_long['gdp_pcap'] = gdp_long['gdp_pcap'].map(parse_number_with_units)
+gdp_long.tail()
+gdp_long.info()
+```
+
+life
+```{python}
+life_long['year'] = life_long['year'].astype(int)
+
+def parse_number_with_units(num):
+    if not isinstance(num, str):
+        return num
+    if num.endswith("k"):
+        return float(num[:-1]) * 1000
+    return float(num)
+life_long['life'] = life_long['life'].map(parse_number_with_units)
+life_long.tail()
+```
+
+#Joining
+```{python}
+gapminder = pd.merge(gdp_long,life_long, on=['country','year'], how='outer')
+print(gapminder)
+```
+
+# Renaming columns to match regions dataframe
+```{python}
+county_translations = {
+    "USA": "United States",
+    "UK": "United Kingdom",
+    "UAE": "United Arab Emirates"
+}
+gapminder['country'] = gapminder['country'].replace(county_translations)
+```
+
+# Adding regions
+```{python}
+region_data = pd.read_excel("https://docs.google.com/spreadsheets/d/1qHalit8sXC0R8oVXibc2wa2gY7bkwGzOybEMTWp-08o/export?format=xlsx", sheet_name="list-of-countries-etc")
+region_data.head()
+
+region_data = region_data.rename(columns={"four_regions": "region"})
+region_data = region_data.rename(columns={"name": "country"})
+region = region_data[["region","country"]]
+gapminder_with_regions = pd.merge(gapminder,region, on=['country'], how='left')
+```
+
+# Plotting
+```{python}
+gapminder_with_regions.head()
+show_plot(
+  px.scatter(
+    gapminder_with_regions, x="gdp_pcap", y="life",
+    labels={"gdp_pcap": "GDP per capita", "life": "Life Expectancy (at birth)"},
+    title = "Life Expectancy vs. GDP per capita, 1952-2007",
+    animation_frame = "year",
+	  color="region",
+	  range_y=[25,90],
+	  range_x=[100,100000],
+    log_x=True)
+   )
+```

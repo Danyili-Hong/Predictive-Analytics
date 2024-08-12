@@ -1,0 +1,117 @@
+---
+title: "ex10"
+author: "Danyili Hong"
+format:
+  html:
+    embed-resources: true
+    code-tools: true
+    code-fold: true
+---
+
+```{python}
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.io as pio
+pio.templates.default = "plotly_white"
+```
+
+```{python}
+#| echo: false
+# Hack to make plotly work in RStudio
+if 'r' in globals() and r['.Platform$GUI'] == "RStudio" and r['suppressMessages(requireNamespace("htmltools"))']:
+  r[".GlobalEnv$to_html <- function(x) { print(htmltools::HTML(x)) }"] and None
+  def show_plot(p): r.to_html(p._repr_html_())
+else:
+  def show_plot(p): return p
+```
+
+```{python}
+people = pd.read_csv("data/people_onegroup.csv")
+people.head()
+people.info()
+```
+
+```{python}
+show_plot(
+  px.histogram(
+    people,
+    x = "score",
+    color = "repay",
+    nbins = 100 
+)
+)
+```
+
+
+# Part 1a
+```{python}
+people_count = people.groupby("repay", as_index=False).agg(size = ("score", "count"))
+people_count["fraction"] = people_count["size"]/people['score'].size
+people['repay'].sum()
+```
+
+# Part 1b
+```{python}
+people.groupby("repay", as_index=False).agg(mean = ("score", "mean"))
+```
+
+# Part 2
+```{python}
+threshold = 61
+people['granted'] = people['score'] > threshold
+people.head()
+loans_granted_count = people['granted'].sum()
+print(loans_granted_count)
+```
+
+65 loans were granted.
+
+# Part 3
+```{python}
+crosstab = pd.crosstab(people['granted'], people['repay'])
+(Tn, Fn), (Fp, Tp) = crosstab.values
+```
+
+```{python}
+PR = Tp / (Tp + Tn + Fp + Fn)
+TPR = Tp / (Tp + Fn)
+Correct = (Tp + Tn) / (Tp + Tn + Fp + Fn)
+
+print("Positive Rate:", round(PR , 3))
+print("True Positive Rate:", round(TPR , 3))
+print("Correctness:", round(Correct , 3))
+
+Precision = Tp / (Tp + Fp)
+Recall = Tp / (Tp + Fn)
+
+print("Precision:", round(Precision , 3))
+print("Recall:", round(Recall , 3))
+```
+# Part 4
+When the threshold is 50, the True Positive Rate is 0.819, and I got the True Positive Rate as 1 at threshold equal to 34. 
+```{python}
+threshold = 34
+people['granted'] = people['score'] > threshold
+people.head()
+loans_granted_count = people['granted'].sum()
+print(loans_granted_count)
+
+crosstab = pd.crosstab(people['granted'], people['repay'])
+(Tn, Fn), (Fp, Tp) = crosstab.values
+
+PR = Tp / (Tp + Tn + Fp + Fn)
+TPR = Tp / (Tp + Fn)
+Correct = (Tp + Tn) / (Tp + Tn + Fp + Fn)
+
+print("Positive Rate:", round(PR , 3))
+print("True Positive Rate:", round(TPR , 3))
+print("Correctness:", round(Correct , 3))
+
+Precision = Tp / (Tp + Fp)
+Recall = Tp / (Tp + Fn)
+
+print("Precision:", round(Precision , 3))
+print("Recall:", round(Recall , 3))
+```
+

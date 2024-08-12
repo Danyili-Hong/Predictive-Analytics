@@ -1,0 +1,128 @@
+---
+title: "ex03"
+author: "Danyili Hong"
+format:
+  html:
+    embed-resources: true
+    code-tools: true
+    code-fold: true
+---
+
+# Load Packages
+
+```{python}
+import pandas as pd
+import plotly.express as px
+```
+
+```{python}
+#| echo: false
+# DATA 202 hack for displaying plotly within RStudio:
+if 'r' in globals() and r['.Platform$GUI'] == "RStudio" and r['suppressMessages(requireNamespace("htmltools"))']:
+  r[".GlobalEnv$to_html <- function(x) { print(htmltools::HTML(x)) }"] and None
+  def show_plot(p): r.to_html(p._repr_html_())
+else:
+  def show_plot(p): return p
+# End hack
+```
+
+# Read Data
+
+```{python}
+daily_rides = pd.read_csv("day_by_type.csv", parse_dates=["date"])
+```
+
+Example row:
+
+```{python}
+daily_rides.head(1).T.style.hide(axis='columns')
+```
+
+#Exercise 1
+```{python}
+show_plot(
+  px.scatter(
+    daily_rides,
+    x="date", y="rides",trendline = "lowess",
+    labels={"date": "Date", "rides": "Number of Rides", "rider_type": "Type of Rider"},
+    color="rider_type", facet_col = "workingday"
+   )
+   .update_traces(marker_size = 3, marker_opacity = 0.5))
+```
+Their trend are pretty much the same for workdays and weekends.There are more casual riders in weekends and more of registered riders in workdays.
+
+#Exercise 2
+```{python}
+show_plot(
+  px.line(
+    daily_rides,
+    x="date", y="rides",
+    labels={"date": "Date", "rides": "Number of Rides", "rider_type": "Type of Rider"},
+    color="rider_type", facet_col = "workingday"
+   ))
+```
+I think it's harder to see the date with this line graph.
+
+#Exercise 3
+```{python}
+gapminder = px.data.gapminder()
+just_usa = gapminder.query("country == 'United States'")
+
+countries = [
+  "China", "India", "United States",
+  "Indonesia", "Brazil", "Pakistan",
+  "Bangladesh", "Nigeria", "Japan"]
+
+gapminder_9_countries = gapminder.query("country in @countries")
+```
+
+```{python}
+show_plot(
+  px.line(
+    just_usa,
+    x="year", y="lifeExp",
+    labels={"year": "Year", "lifeExp": "Life Expectancy (years)"},
+    title = "Life Expectancy in the United States"
+   )
+   .update_traces(line_color = "green"))
+```
+#Exercise 4
+```{python}
+show_plot(
+  px.line(
+    gapminder_9_countries,
+    x="year", y="lifeExp",
+    labels={"year": "Year", "lifeExp": "Life Expectancy (years)"},
+    title = "Life Expectancy in 9 Countries",
+    facet_col = "country",
+    facet_col_wrap = 3
+   ))
+```
+
+
+```{python}
+show_plot(
+  px.line(
+    gapminder_9_countries,
+    x="year", y="lifeExp",
+    labels={"year": "Year", "lifeExp": "Life Expectancy (years)"},
+    title = "Life Expectancy in 9 Countries",
+    color = "country"
+   ))
+```
+It's easier to see Life Expectancy for a specific year in the colored graph than in facet one. You can compare all of them at once in the colored one.
+
+#Exercise 5
+```{python}
+show_plot(
+  px.scatter(gapminder, x="gdpPercap", y="lifeExp",
+  labels={"gdpPercap": "GDP per capita", "lifeExp": "Life Expectancy (at birth)"},
+  title = "Life Expectancy vs. GDP per capita, 1952-2007",
+  animation_frame = "year",
+	         size="pop", color="continent",
+                 hover_name="country", log_x=True, size_max=60)
+   )
+```
+Reflection:
+I was stuck at step 3 but I asked a friend to help. 
+I would say it took me about 1.5 hour. 

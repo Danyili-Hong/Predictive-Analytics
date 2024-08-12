@@ -1,0 +1,244 @@
+---
+title: "ex09"
+author: "Danyili Hong"
+format:
+  html:
+    embed-resources: true
+    code-tools: true
+    code-fold: true
+---
+
+```{python}
+#| echo: false
+# Hack to make plotly work in RStudio
+if 'r' in globals() and r['.Platform$GUI'] == "RStudio" and r['suppressMessages(requireNamespace("htmltools"))']:
+  r[".GlobalEnv$to_html <- function(x) { print(htmltools::HTML(x)) }"] and None
+  def show_plot(p): r.to_html(p._repr_html_())
+else:
+  def show_plot(p): return p
+```
+
+```{python}
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+import pandas as pd
+
+import plotly.express as px
+import plotly.io as pio
+pio.templates.default = "plotly_white"
+```
+
+# Part 1
+```{python}
+home_sales = pd.read_csv("https://calvin-data-science.github.io/data202/data/ames/ames_home_sales.csv")
+home_sales["Sale_Price"] = home_sales["Sale_Price"] / 1000
+home_sales.rename(columns={"Sale_Price": "sale_price"}, inplace=True)
+```
+
+# Part 2
+```{python}
+home_sales = home_sales.query("Sale_Condition == 'Normal' and Gr_Liv_Area <4000")
+home_sales.info()
+```
+# Part 3
+
+We’ll use this data to try to predict sale price in thousands of dollars from two features: above ground living area and year built.
+```{python}
+target_column = 'sale_price'
+feature_columns = ['Gr_Liv_Area', 'Year_Built']
+```
+
+```{python}
+home_train, home_test = train_test_split(home_sales, random_state = 42, test_size = 0.2 )
+
+print(f"Training set size: {len(home_train)} homes, Test set size: {len(home_test)} homes ")
+```
+
+```{python}
+def evaluate(y_true, y_pred):
+    return pd.Series({
+        'MAE': mean_absolute_error(y_true, y_pred),
+        'MAPE': mean_absolute_percentage_error(y_true, y_pred),
+        # 'MSE': mean_squared_error(y_true, y_pred),
+    })
+```
+
+# Part 4
+```{python}
+show_plot(
+  px.histogram(
+    home_train,
+    x = 'sale_price',
+    nbins = 50
+   ))
+```
+there are some large outliers in the dataset.
+
+# Part 5
+```{python}
+show_plot(
+  px.scatter(
+    home_train,
+    x = "Gr_Liv_Area",
+    y = "sale_price",
+    trendline = "lowess",
+    labels = {"sale_price":"Sale Pirce(thousands of dollars)" , "Gr_Liv_Area": "Above Ground Area(sq ft)"}
+  )
+  .update_traces(marker_size = 3))
+```
+```{python}
+show_plot(
+  px.scatter(
+    home_train,
+    x = "Year_Built",
+    y = "sale_price",
+    trendline = "lowess",
+    labels = {"sale_price":"Sale Pirce(thousands of dollars)"}
+  )
+  .update_traces(marker_size = 3))
+```
+
+# Part 6
+```{python}
+lr = LinearRegression().fit(
+    X=home_train[feature_columns],
+    y=home_train[target_column]
+)
+home_train['linreg_prediction'] = lr.predict(home_train[feature_columns])
+evaluate(home_train[target_column], home_train['linreg_prediction'])
+```
+```{python}
+lr = LinearRegression().fit(
+    X=home_train[feature_columns],
+    y=home_train[target_column]
+)
+home_test['linreg_prediction'] = lr.predict(home_test[feature_columns])
+evaluate(home_test[target_column], home_test['linreg_prediction'])
+```
+
+
+# Part 7
+```{python}
+Tree = DecisionTreeRegressor(max_depth=3).fit(
+    X=home_train[feature_columns],
+    y=home_train[target_column]
+)
+home_train['dt_prediction'] = Tree.predict(home_train[feature_columns])
+evaluate(home_train[target_column], home_train['dt_prediction'])
+```
+
+```{python}
+Tree = DecisionTreeRegressor(max_depth=3).fit(
+    X=home_train[feature_columns],
+    y=home_train[target_column]
+)
+home_test['dt_prediction'] = Tree.predict(home_test[feature_columns])
+evaluate(home_test[target_column], home_test['dt_prediction'])
+```
+
+```{python}
+ames_test_by_model = home_test.melt(
+    id_vars=['sale_price'] + feature_columns,
+    value_vars=['linreg_prediction', 'dt_prediction'],
+    var_name='model',
+    value_name='prediction')
+
+ames_test_by_model['model'] = ames_test_by_model['model'].replace({
+    'linreg_prediction': 'Linear Regression',
+    'dt_prediction': 'Decision Tree'
+})
+
+ames_test_by_model['resid'] = ames_test_by_model['sale_price'] - ames_test_by_model['prediction']
+ames_test_by_model.head()
+```
+
+# Part 8
+```{python}
+show_plot(
+  px.scatter(
+    ames_test_by_model,
+    x = "sale_price",
+    y = "prediction",
+    facet_col = "model"
+  )
+  .update_traces(marker_size = 3))
+```
+
+```{python}
+show_plot(
+  px.box(
+    ames_test_by_model,
+    x = "resid",
+    y = "model",
+  ))
+```
+I think linear regression model works better.
+
+# Part 9
+```{python}
+Tree = DecisionTreeRegressor(max_depth=5).fit(
+    X=home_train[feature_columns],
+    y=home_train[target_column]
+)
+home_train['dt_prediction'] = Tree.predict(home_train[feature_columns])
+evaluate(home_train[target_column], home_train['dt_prediction'])
+```
+
+```{python}
+Tree = DecisionTreeRegressor(max_depth=5).fit(
+    X=home_train[feature_columns],
+    y=home_train[target_column]
+)
+home_test['dt_prediction'] = Tree.predict(home_test[feature_columns])
+evaluate(home_test[target_column], home_test['dt_prediction'])
+```
+Both of their MAE and MAPE became lower than before. 
+
+```{python}
+newfeature_columns = ['Gr_Liv_Area', 'Year_Built', 'Bedroom_AbvGr']
+```
+
+```{python}
+lr = LinearRegression().fit(
+    X=home_train[newfeature_columns],
+    y=home_train[target_column]
+)
+home_train['linreg_prediction'] = lr.predict(home_train[newfeature_columns])
+evaluate(home_train[target_column], home_train['linreg_prediction'])
+```
+
+```{python}
+lr = LinearRegression().fit(
+    X=home_train[newfeature_columns],
+    y=home_train[target_column]
+)
+home_test['linreg_prediction'] = lr.predict(home_test[newfeature_columns])
+evaluate(home_test[target_column], home_test['linreg_prediction'])
+```
+
+
+# Part 7
+```{python}
+Tree = DecisionTreeRegressor(max_depth=3).fit(
+    X=home_train[newfeature_columns],
+    y=home_train[target_column]
+)
+home_train['dt_prediction'] = Tree.predict(home_train[newfeature_columns])
+evaluate(home_train[target_column], home_train['dt_prediction'])
+```
+
+```{python}
+Tree = DecisionTreeRegressor(max_depth=3).fit(
+    X=home_train[newfeature_columns],
+    y=home_train[target_column]
+)
+home_test['dt_prediction'] = Tree.predict(home_test[newfeature_columns])
+evaluate(home_test[target_column], home_test['dt_prediction'])
+```
+For Linear Regression, both MAE and MAPE became smaller, but for Decision Tree Regression, both MAE and MAPE stayed the same. 
+
+
+
